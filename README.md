@@ -271,6 +271,43 @@ Embedded TypeScript aims to be zero config, but can be configured by creating an
 </tbody>
 </table>
 
+## CLI 🖥
+
+```
+ets [options] [files...]
+```
+
+By default `ets` searches the `source` directory for `.ets` files and writes
+each generated module next to its template (`<template>.ts`). You can override
+this from the command line. Command line flags take precedence over
+`ets.config.*`.
+
+| Argument / Option | Description                                                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `files...`        | Explicit `.ets` files to compile. When provided, the `source` directory is not searched.                                                                                 |
+| `--source <dir>`  | Directory searched for `.ets` files when no files are passed. Defaults to the current working directory.                                                                 |
+| `--out-dir <dir>` | Directory to write generated `.ts` files into. When omitted, each file is written next to its template.                                                                  |
+| `--root <dir>`    | Base directory used to preserve the input tree structure underneath `--out-dir`. When omitted, outputs are flattened into `--out-dir` by basename. Requires `--out-dir`. |
+| `--help`          | Show usage.                                                                                                                                                              |
+
+Examples:
+
+```sh
+# Compile every .ets file in place (default).
+ets
+
+# Compile specific files in place.
+ets src/emails/welcome.ets src/emails/receipt.ets
+
+# Flatten generated modules into a build directory.
+ets src/emails/welcome.ets --out-dir dist
+# -> dist/welcome.ets.ts
+
+# Mirror the input tree underneath the build directory.
+ets src/emails/welcome.ets --out-dir dist --root src
+# -> dist/emails/welcome.ets.ts
+```
+
 ## Contributing 👫
 
 PR's and issues welcomed! For more guidance check out [CONTRIBUTING.md](https://github.com/tatethurston/embedded-typescript/blob/master/CONTRIBUTING.md)
