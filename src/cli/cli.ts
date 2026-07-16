@@ -7,6 +7,8 @@ import {
   statSync,
 } from "fs";
 import { basename, dirname, join, relative, isAbsolute } from "path";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
 import { compiler } from "../compiler/index.js";
 import { isParseError } from "../parser/index.js";
 
@@ -34,59 +36,53 @@ type Config = {
 };
 
 type Args = {
-  flags: Record<string, string | undefined>;
-  positionals: string[];
+  source?: string;
+  outDir?: string;
+  root?: string;
+  files: string[];
 };
 
-const HELP = `Usage: ets [options] [files...]
+async function parseArgs(argv: string[]): Promise<Args> {
+  const parsed = await yargs(hideBin(argv))
+    .scriptName("ets")
+    .command(
+      "$0 [files...]",
+      "Compile embedded-typescript (.ets) templates to .ts modules."
+    )
+    .positional("files", {
+      describe:
+        "Explicit .ets files to compile. When omitted, the source directory is searched recursively.",
+      type: "string",
+      array: true,
+      default: [] as string[],
+    })
+    .option("source", {
+      type: "string",
+      describe:
+        "Directory searched for .ets files when no files are passed. Defaults to the current working directory.",
+    })
+    .option("out-dir", {
+      type: "string",
+      describe:
+        "Directory to write generated .ts files into. When omitted, each file is written next to its template.",
+    })
+    .option("root", {
+      type: "string",
+      describe:
+        "Base directory used to preserve the input tree structure underneath --out-dir. When omitted, outputs are flattened into --out-dir by basename.",
+    })
+    .implies("root", "out-dir")
+    .strict()
+    .version(false)
+    .help()
+    .parseAsync();
 
-Compiles embedded-typescript (.ets) templates to .ts modules.
-
-Arguments:
-  files          Explicit .ets files to compile. When omitted, the source
-                 directory is searched recursively for .ets files.
-
-Options:
-  --source <dir>   Directory searched for .ets files when no files are passed.
-                   Defaults to the current working directory.
-  --out-dir <dir>  Directory to write generated .ts files into. When omitted,
-                   each file is written next to its template.
-  --root <dir>     Base directory used to preserve the input tree structure
-                   underneath --out-dir. When omitted, outputs are flattened
-                   into --out-dir by basename. Only meaningful with --out-dir.
-  --help           Show this message.
-`;
-
-function parseArgs(argv: string[]): Args {
-  const flags: Record<string, string | undefined> = {};
-  const positionals: string[] = [];
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (!arg.startsWith("--")) {
-      positionals.push(arg);
-      continue;
-    }
-
-    const body = arg.slice(2);
-    const eq = body.indexOf("=");
-    if (eq !== -1) {
-      flags[body.slice(0, eq)] = body.slice(eq + 1);
-      continue;
-    }
-
-    // Boolean flag (e.g. --help) or a `--flag value` pair. We treat the next
-    // argument as the value unless it looks like another flag.
-    const hasValue = i + 1 < argv.length && !argv[i + 1].startsWith("--");
-    if (hasValue) {
-      flags[body] = argv[i + 1];
-      i++;
-    } else {
-      flags[body] = "";
-    }
-  }
-
-  return { flags, positionals };
+  return {
+    source: parsed.source,
+    outDir: parsed.outDir,
+    root: parsed.root,
+    files: parsed.files,
+  };
 }
 
 function getConfigFilePath(): string | undefined {
@@ -136,17 +132,17 @@ async function getConfig(args: Args): Promise<Config> {
 
   // Command line flags take precedence over the configuration file.
   const cliConfig: UserConfig = {};
-  if (args.flags.source !== undefined) {
-    cliConfig.source = args.flags.source;
+  if (args.source !== undefined) {
+    cliConfig.source = args.source;
   }
-  if (args.flags["out-dir"] !== undefined) {
-    cliConfig.outDir = args.flags["out-dir"];
+  if (args.outDir !== undefined) {
+    cliConfig.outDir = args.outDir;
   }
-  if (args.flags.root !== undefined) {
-    cliConfig.root = args.flags.root;
+  if (args.root !== undefined) {
+    cliConfig.root = args.root;
   }
-  if (args.positionals.length) {
-    cliConfig.files = args.positionals;
+  if (args.files.length) {
+    cliConfig.files = args.files;
   }
 
   return {
@@ -197,12 +193,7 @@ function destFor(template: string, config: Config): string {
 }
 
 export async function run(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.flags.help !== undefined) {
-    console.log(HELP);
-    return;
-  }
-
+  const args = await parseArgs(process.argv);
   const config = await getConfig(args);
   const templates = config.files.length
     ? config.files
